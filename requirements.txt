@@ -1,0 +1,7 @@
+streamlit
+pandas
+faker
+transformers
+torch
+matplotlib
+wordcloud

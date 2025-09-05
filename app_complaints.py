@@ -1,0 +1,72 @@
+import streamlit as st
+import pandas as pd
+import random
+from faker import Faker
+from transformers import pipeline
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+
+st.set_page_config(page_title="Customer Complaints Analysis", page_icon="📢", layout="wide")
+
+# Initialize Faker
+fake = Faker()
+categories = ["Delay", "Rude Behavior", "Pricing Issue", "Service Quality"]
+
+# Generate synthetic complaints
+@st.cache_data
+def generate_complaints(n=300):
+    data = []
+    for _ in range(n):
+        cat = random.choice(categories)
+        if cat == "Delay":
+            text = f"The professional arrived {random.randint(20,90)} minutes late."
+        elif cat == "Rude Behavior":
+            text = "The service professional was very rude during the visit."
+        elif cat == "Pricing Issue":
+            text = f"I was charged {random.randint(200,1000)} INR extra unexpectedly."
+        else:
+            text = "The service quality was poor and not up to the mark."
+        data.append([fake.unique.first_name(), text])
+    return pd.DataFrame(data, columns=["Customer", "Complaint"])
+
+# Load synthetic dataset
+df = generate_complaints()
+
+# Load Hugging Face Zero-Shot Classifier
+@st.cache_resource
+def load_model():
+    return pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+
+classifier = load_model()
+
+# Categorize complaints
+@st.cache_data
+def categorize_data(df):
+    df["Category"] = df["Complaint"].apply(lambda x: classifier(x, candidate_labels=categories)["labels"][0])
+    return df
+
+df = categorize_data(df)
+
+st.title("📢 Customer Complaints Analysis (LLM)")
+st.markdown("Synthetic complaints dataset auto-generated & categorized using Hugging Face transformer.")
+
+# Complaint distribution
+st.subheader("📊 Complaint Distribution")
+counts = df["Category"].value_counts()
+fig, ax = plt.subplots()
+counts.plot(kind="bar", ax=ax, color="skyblue")
+st.pyplot(fig)
+
+# Word cloud
+st.subheader("☁️ Word Cloud by Category")
+selected = st.selectbox("Choose Category", categories)
+text = " ".join(df[df["Category"] == selected]["Complaint"].tolist())
+wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
+fig, ax = plt.subplots()
+ax.imshow(wordcloud, interpolation="bilinear")
+ax.axis("off")
+st.pyplot(fig)
+
+# Data table
+st.subheader("📑 Complaints Table")
+st.dataframe(df, use_container_width=True)
